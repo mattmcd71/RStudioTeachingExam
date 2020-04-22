@@ -1,0 +1,180 @@
+---
+title: "readxl, dplyr and the pipe"
+author: "Matt McDonald"
+date: "4/21/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# readxl
+
+## Tidyverse Packages
+
+R includes some useful tools to help with data analysis and manipulation.  One of the primary sources of data we use can be found in Excel spreadsheets.  The "readxl" package can help us access this data directly. 
+
+In order to access the readxl package, we need to load it.  Fortunately, readxl is a component of a suite of R packages called the "tidyverse".  The packages included in the "tidyverse" suite are cutting edge, best-in-class tools for data manipulation, visualization and programming, and are supported by RStudio.  
+
+We can load the "tidyverse" suite of models with the following command:
+
+```{r}
+library(tidyverse)
+```
+
+## Loading the Data
+
+Once tidyverse is loaded, we can load data into R directly from Excel.  We use the "<-" operator to indicate variable assignment.  The following code uses the "read_excel" function from the readxl package to load the data into a variable called "return_data".  We can see the contents of our new variable by typing its name into the console (the equivalent of the 2nd line of code in the block below).
+
+```{r load_data}
+return_data <- readxl::read_excel('31var.xlsx', sheet='34var')
+return_data
+```
+
+## Getting Help
+
+The read_excel function is very flexible, and there are many ways to refer to the data.  You can see that we simply pointed it to the sheet containing our important data with the "sheet" paramater.  You can get very specific about where the data is that you want to input, such as by the range or how many rows to read by using the paramers for the function.  Any time you're looking for help on a function in R, simply type the command "?" followed by the function you're interested in, and R will show you the appropriate help file. 
+
+```{r}
+#> ? read_excel
+```
+
+## Data Frames
+
+When we load our data into R, the typical format used is called a DataFrame (sometimes people call them tibbles).  Data frames can be thought of as a sheet of data in an Excel file, with rows and columns.  One useful feature of DataFrames is that each column must be of the same data type.  This helps give us confidence that we can perform the same operations across all of our data, solving a pitfall that sometimes we encounter in Excel.  Check out the "Environment" tab in RStudio to inspect the data types that we loaded in the "return_data" DataFrame.  
+
+For more information about data types in R, check out:
+
+<https://swcarpentry.github.io/r-novice-inflammation/13-supp-data-structures/>
+
+# Data Manipulation with dplyr
+
+dplyr is another package that gets loaded when we load the tidyverse, and it is very useful for data manipulation.  In this section, I will outline some useful functions in dplyr, and point out their equivalents in Excel
+
+## select
+
+Select allows you to choose columns from your data frame that you want to work with.  This is similar to hiding columns in your Excel spreadsheet.
+
+In this example, I will only focus on three columns of my data: date, ret and marketcap:
+
+```{r}
+select(return_data, date, ret, marketcap)
+```
+
+## mutate
+
+mutate allows us to create new variables or override existing variables.  This is the equivalent of adding a new calculated column to our data and "copy/paste down" the formula to all the applicable cells.
+
+In this example, I'm taking the ret column, which is annualized returns, and converting them to quarterly returns.  You can see that there are some benefits to the syntax of R...I don't have to "copy/paste down" my formula...it's applied to all the rows of my data automatically!
+
+```{r}
+mutate(select(return_data, date, ret, marketcap), qtr_ret=(1 + ret) ^ (1/4) - 1)
+```
+
+# A quick diversion: pipes!
+
+The code we wrote above is already starting to exhibit some readability issues.  R has a very handy syntax tool that helps make our code more readable and prevents us from having to have "nested" function calls.  "nested" function calls are what makes some very long excel cell formulas difficult to read.
+
+Here's how it works:  the characters "%>%" are called the "pipe", and they allow us to take a value and "pipe" it into the first parameter of a function. So, the command:
+
+```{r}
+2 %>% sqrt()
+```
+
+is the equivalent of the command:
+
+```{r}
+sqrt(2)
+```
+
+This doesn't seem like that great of an innovation in this example, but using it to rewrite the code we wrote above yields:
+
+```{r}
+return_data %>%
+  select(date, ret, marketcap) %>%
+  mutate(qtr_ret = (1 + ret) ^ (1/4) - 1)
+```
+
+Which is really nice!  We don't have to start at the middle of our function and read out, we can start at the top of our code and read down to understand all the steps we've taken, in order.  We'll be using pipes for the rest of our examples
+
+# Back to data manipulation with dplyr
+
+## filter
+
+filter allows us to select rows of our data based on some rules we apply to the data.  This is the equivalent of using the filtering functionality on the data ribbon in Excel.
+
+For example, if we only want to see data that had a quarterly return greater than 30%, we could use the following code:
+
+```{r}
+return_data %>%
+  select(date, ret, marketcap) %>%
+  mutate(qtr_ret = (1 + ret) ^ (1/4) - 1) %>%
+  filter(qtr_ret > 0.4)
+```
+
+## summarize
+
+summarize allows us to calculate summary statistics, like sum, average or count.  It's the equivalent of using a function like "sum" or "average" in Excel, or the summary stats Excel shows you in the lower right hand corner of the screen when you highlight some data.
+
+The following example calculates the average marketcap for all companies with a quarterly return > 40%.
+
+```{r}
+return_data %>%
+  select(date, ret, marketcap) %>%
+  mutate(qtr_ret = (1 + ret) ^ (1/4) - 1) %>%
+  filter(qtr_ret > 0.4) %>% 
+  summarize(mean_mkt_cap = mean(marketcap))
+
+```
+
+## group_by
+
+group_by is usually used with summarize, and allows us to get summary statistics by group.  In Excel, you would normally use some sort of pivot functionality to do this.
+
+In this example, we're getting the average marketcap by reporting date for companies that had a quarterly return greater than 40%:
+
+```{r}
+return_data %>%
+  select(date, ret, marketcap) %>%
+  mutate(qtr_ret = (1 + ret) ^ (1/4) - 1) %>%
+  filter(qtr_ret > 0.4) %>% 
+  group_by(date) %>%
+  summarize(mean_mkt_cap = mean(marketcap))
+```
+
+## arrange
+
+arrange allows us to order our data.  It's the equivalent of using the sort functionality on the data ribbon in Excel.
+
+In this example, we will sort by the average marketcap for our sample data, descending.
+
+```{r}
+return_data %>%
+  select(date, ret, marketcap) %>%
+  mutate(qtr_ret = (1 + ret) ^ (1/4) - 1) %>%
+  filter(qtr_ret > 0.4) %>% 
+  group_by(date) %>%
+  summarize(mean_mkt_cap = mean(marketcap)) %>%
+  arrange(desc(mean_mkt_cap))
+```
+
+
+# Notes
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. 
+
+## ggplot2
+
+A future session will discuss ggplot2, which is a totally awesome package for creating awesome plots.  It can do something that Excel cannot: facets!!
+
+## sources
+I took a lot of inspiration for this lesson from the following site:
+
+<https://rfortherestofus.com/2019/06/a-guide-to-r-for-excel-users/>
